@@ -518,7 +518,7 @@ void Adafruit_GFX::fillRoundRect(int16_t x, int16_t y, int16_t w,
         int16_t h, int16_t r, uint16_t color) {
     // smarter version
     startWrite();
-    writeFillRect(x+r, y, w-2*r, h, color);
+    fillRect(x+r, y, w-2*r, h, color);
 
     // draw four corners
     fillCircleHelper(x+w-r-1, y+r, r, 1, h-2*r-1, color);
@@ -1027,28 +1027,31 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
 
         if(!_cp437 && (c >= 176)) c++; // Handle 'classic' charset behavior
 
-        startWrite();
+//        startWrite();
         for(int8_t i=0; i<5; i++ ) { // Char bitmap = 5 columns
             uint8_t line = pgm_read_byte(&font[c * 5 + i]);
             for(int8_t j=0; j<8; j++, line >>= 1) {
                 if(line & 1) {
                     if(size == 1)
-                        writePixel(x+i, y+j, color);
+                        drawPixel(x+i, y+j, color);
                     else
-                        writeFillRect(x+i*size, y+j*size, size, size, color);
+                        fillRect(x+i*size, y+j*size, size, size, color);
                 } else if(bg != color) {
                     if(size == 1)
-                        writePixel(x+i, y+j, bg);
+                        drawPixel(x+i, y+j, bg);
                     else
-                        writeFillRect(x+i*size, y+j*size, size, size, bg);
+                        fillRect(x+i*size, y+j*size, size, size, bg);
                 }
             }
         }
         if(bg != color) { // If opaque, draw vertical line for last column
-            if(size == 1) writeFastVLine(x+5, y, 8, bg);
-            else          writeFillRect(x+5*size, y, size, 8*size, bg);
+            if(size == 1) drawFastVLine(x+5, y, 8, bg);
+            else          fillRect(x+5*size, y, size, 8*size, bg);
         }
-        endWrite();
+// Don't do this if using DMA
+// But DMA is only known in SPITFT, not here
+// Move DMA stuff into GFX main?
+//        endWrite();
 
     } else { // Custom font
 
@@ -1091,7 +1094,7 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
         // displays supporting setAddrWindow() and pushColors()), but haven't
         // implemented this yet.
 
-        startWrite();
+//        startWrite();
         for(yy=0; yy<h; yy++) {
             for(xx=0; xx<w; xx++) {
                 if(!(bit++ & 7)) {
@@ -1099,16 +1102,16 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
                 }
                 if(bits & 0x80) {
                     if(size == 1) {
-                        writePixel(x+xo+xx, y+yo+yy, color);
+                        drawPixel(x+xo+xx, y+yo+yy, color);
                     } else {
-                        writeFillRect(x+(xo16+xx)*size, y+(yo16+yy)*size,
+                        fillRect(x+(xo16+xx)*size, y+(yo16+yy)*size,
                           size, size, color);
                     }
                 }
                 bits <<= 1;
             }
         }
-        endWrite();
+//       endWrite();
 
     } // End classic vs custom font
 }

@@ -53,6 +53,7 @@
   static Adafruit_ZeroDMA  dma;              ///< DMA object
   static volatile boolean  dma_busy = false; ///< true = DMA transfer in progress
   static Adafruit_SPITFT  *tftptr = NULL;    ///< For callback to end transaction
+  static uint8_t           bytestore;        ///< 1-byte storage for some DMA ops
   static void dma_callback(Adafruit_ZeroDMA *dma) {
       tftptr->endWrite();
       dma_busy = false;
@@ -442,9 +443,10 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
     if(useDMA && (hi == lo)) { // If high and low bytes are same, can use DMA...
         uint32_t bytesToGo = len * 2,  // Pixel count -> byte count
                  bytesThisDescriptor, i;
+        bytestore = lo; // Save value to outlive function scope
         for(i=0; bytesToGo > 0; i++) {
             bytesThisDescriptor = (bytesToGo < 65535) ? bytesToGo : 65535;
-            descriptor[i].SRCADDR.reg       = (uint32_t)&color;
+            descriptor[i].SRCADDR.reg       = (uint32_t)&bytestore;
             descriptor[i].BTCTRL.bit.SRCINC = 0;
             descriptor[i].BTCNT.reg         = bytesThisDescriptor;
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
@@ -467,7 +469,6 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
 #endif
 
 #ifdef SPI_HAS_WRITE_PIXELS
-// WTF is this exactly?
     if(_sclk >= 0) {
         for(uint32_t t=0; t<len; t++) {
             writePixel(color);
@@ -516,10 +517,10 @@ void Adafruit_SPITFT::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if((x >= 0) && (x < _width) && (y >= 0) && (y < _height)) {
         startWrite();
         setAddrWindow(x, y, 1, 1);
-// TBD: any benefit to DMA-ifying the single-pixel case?
-// Possibly, clipping math can proceed on next pixel.
         writePixel(color);
         endWrite();
+        // No benefit to DMA-ifying single-pixel case,
+        // it's actually ~20% slower what with callback, etc.
     }
 }
 
