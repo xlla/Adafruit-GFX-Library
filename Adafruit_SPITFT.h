@@ -37,7 +37,7 @@ class Adafruit_SPITFT : public Adafruit_GFX {
   public:
     Adafruit_SPITFT(uint16_t w, uint16_t h, int8_t _CS, int8_t _DC, int8_t _MOSI, int8_t _SCLK, int8_t _RST = -1, int8_t _MISO = -1);
 #ifdef ARDUINO_ARCH_SAMD
-    Adafruit_SPITFT(uint16_t w, uint16_t h, int8_t _CS, int8_t _DC, int8_t _RST = -1, boolean dma = false);
+    Adafruit_SPITFT(uint16_t w, uint16_t h, int8_t _CS, int8_t _DC, int8_t _RST = -1, boolean dma = true);
 #else
     Adafruit_SPITFT(uint16_t w, uint16_t h, int8_t _CS, int8_t _DC, int8_t _RST = -1);
 #endif

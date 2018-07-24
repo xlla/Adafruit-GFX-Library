@@ -449,6 +449,7 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
             descriptor[i].BTCNT.reg         = bytesThisDescriptor;
             descriptor[i].BTCTRL.bit.SRCINC = 0;
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
+            bytesToGo                      -= bytesThisDescriptor;
         }
         descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
 
