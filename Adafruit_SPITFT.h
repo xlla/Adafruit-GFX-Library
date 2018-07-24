@@ -52,11 +52,6 @@ class Adafruit_SPITFT : public Adafruit_GFX {
     void     startWrite(void);
     void     endWrite(void);
 
-    void     writePixel(int16_t x, int16_t y, uint16_t color);
-    void     writeFillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
-    void     writeFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
-    void     writeFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
-
     // Transaction API not used by GFX
 
     /*!

@@ -52,7 +52,11 @@
   // making them static within this .cpp file, should be OKish:
   static Adafruit_ZeroDMA  dma;              ///< DMA object
   static volatile boolean  dma_busy = false; ///< true = DMA transfer in progress
-  static void dma_callback(Adafruit_ZeroDMA *dma) { dma_busy = false; }
+  static Adafruit_SPITFT  *tftptr = NULL;    ///< For callback to end transaction
+  static void dma_callback(Adafruit_ZeroDMA *dma) {
+      tftptr->endWrite();
+      dma_busy = false;
+  }
 #endif
 
 /**************************************************************************/
@@ -208,7 +212,11 @@ void Adafruit_SPITFT::initSPI(uint32_t freq) {
         // update (one per line along major axis, since screen can be
         // rotated).  Descriptor-per-line is necessary to handle clipping
         // in drawRGBBitmap().
-        int major = (_width > _height) ? _width : _height;
+        int major = (WIDTH > HEIGHT) ? WIDTH : HEIGHT;
+        // TO DO: dma.allocate() should happen only ONCE.
+        // As written, if multiple SPITFT instances it will
+        // be called repeatedly.  The descriptor stuff should
+        // still be per-instance.
         if((dma.allocate() == DMA_STATUS_OK) &&
           ((descriptor = (DmacDescriptor *)malloc(
             major * sizeof(DmacDescriptor))))) {
@@ -339,8 +347,7 @@ void Adafruit_SPITFT::spiWrite(uint8_t b) {
 /**************************************************************************/
 void inline Adafruit_SPITFT::startWrite(void) {
 #ifdef ARDUINO_ARCH_SAMD
-    while(dma_busy); // Wait for prior SPI DMA operation to complete
-    endWrite();      // End transaction, deselect
+    while(dma_busy); // Wait for SPI DMA transaction (if any) to complete
 #endif
     SPI_BEGIN_TRANSACTION();
     SPI_CS_LOW();
@@ -410,9 +417,10 @@ void inline Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len) {
         // as it will play well with any other code using the DMA library
         // on other channels.
 
+        tftptr   = this;
         dma_busy = true;
         dma.startJob();
-        // transfer must be left 'open' during DMA
+        // transfer must be left open during DMA (callback will close)
         return;
     }
 #endif
@@ -422,6 +430,8 @@ void inline Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len) {
 /**************************************************************************/
 /*!
     @brief  Blit a 2-byte color many times  (must have a transaction in progress)
+            Inputs must be clipped; number of elements should not exceed
+            the rect previously defined by setAddrWindow().
     @param  color  The 16-bit 5-6-5 Color to draw
     @param  len    How many pixels to draw
 */
@@ -448,14 +458,16 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
         // as it will play well with any other code using the DMA library
         // on other channels.
 
+        tftptr   = this;
         dma_busy = true;
         dma.startJob();
-        // transfer must be left 'open' during DMA
+        // transfer must be left open during DMA (callback will close)
         return;
     }
 #endif
 
 #ifdef SPI_HAS_WRITE_PIXELS
+// WTF is this exactly?
     if(_sclk >= 0) {
         for(uint32_t t=0; t<len; t++) {
             writePixel(color);
@@ -476,87 +488,20 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
         len -= tlen;
     }
 #else
-    if(_sclk < 0) {
-        for(uint32_t t=len; t; t--) {
-            HSPI_WRITE(hi);
-            HSPI_WRITE(lo);
-        }
-    } else {
-        for(uint32_t t=len; t; t--) {
+    if(_sclk >= 0) {
+        while(len--) {
             spiWrite(hi);
             spiWrite(lo);
+        }
+    } else {
+        while(len--) {
+            HSPI_WRITE(hi);
+            HSPI_WRITE(lo);
         }
     }
 #endif
 
     endWrite();
-}
-
-/**************************************************************************/
-/*!
-    @brief  Write a pixel (must have a transaction in progress)
-    @param  x      x coordinate
-    @param  y      y coordinate
-    @param  color  16-bit 5-6-5 Color to draw with
-*/
-/**************************************************************************/
-void Adafruit_SPITFT::writePixel(int16_t x, int16_t y, uint16_t color) {
-    if((x >= 0) && (x < _width) && (y >= 0) && (y < _height)) {
-        setAddrWindow(x,y,1,1);
-        writePixel(color);
-    }
-}
-
-/**************************************************************************/
-/*!
-    @brief  Write a filled rectangle (must have a transaction in progress)
-            ALL inputs MUST be valid and clipped in higher-level functions,
-            this includes full clip -- do not call if no drawing to occur.
-    @param  x      Top left corner x coordinate
-    @param  y      Top left corner y coordinate
-    @param  w      Width in pixels
-    @param  h      Height in pixels
-    @param  color  16-bit 5-6-5 Color to fill with
-*/
-/**************************************************************************/
-void Adafruit_SPITFT::writeFillRect(
-  int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    setAddrWindow(x, y, w, h);
-    writeColor(color, w * h);
-}
-
-/**************************************************************************/
-/*!
-    @brief  Write a perfectly vertical line (must have a transaction in progress)
-            ALL inputs MUST be valid and clipped in higher-level functions,
-            this includes full clip -- do not call if no drawing to occur.
-    @param  x      Top-most x coordinate
-    @param  y      Top-most y coordinate
-    @param  h      Height in pixels
-    @param  color  16-bit 5-6-5 Color to fill with
-*/
-/**************************************************************************/
-void inline Adafruit_SPITFT::writeFastVLine(
-  int16_t x, int16_t y, int16_t h, uint16_t color) {
-    setAddrWindow(x, y, 1, h);
-    writeColor(color, h);
-}
-
-/**************************************************************************/
-/*!
-    @brief  Write a perfectly horizontal line (must have a transaction in progress)
-            ALL inputs MUST be valid and clipped in higher-level functions,
-            this includes full clip -- do not call if no drawing to occur.
-    @param  x      Left-most x coordinate
-    @param  y      Left-most y coordinate
-    @param  w      Width in pixels
-    @param  color  16-bit 5-6-5 Color to fill with
-*/
-/**************************************************************************/
-void inline Adafruit_SPITFT::writeFastHLine(
-  int16_t x, int16_t y, int16_t w, uint16_t color) {
-    setAddrWindow(x, y, w, 1);
-    writeColor(color, w);
 }
 
 /**************************************************************************/
@@ -568,9 +513,14 @@ void inline Adafruit_SPITFT::writeFastHLine(
 */
 /**************************************************************************/
 void Adafruit_SPITFT::drawPixel(int16_t x, int16_t y, uint16_t color) {
-    startWrite();
-    writePixel(x, y, color);
-    endWrite();
+    if((x >= 0) && (x < _width) && (y >= 0) && (y < _height)) {
+        startWrite();
+        setAddrWindow(x, y, 1, 1);
+// TBD: any benefit to DMA-ifying the single-pixel case?
+// Possibly, clipping math can proceed on next pixel.
+        writePixel(color);
+        endWrite();
+    }
 }
 
 /**************************************************************************/
@@ -585,7 +535,7 @@ void Adafruit_SPITFT::drawPixel(int16_t x, int16_t y, uint16_t color) {
 void Adafruit_SPITFT::drawFastVLine(
   int16_t x, int16_t y, int16_t h, uint16_t color) {
     if((x >= 0) && (x < _width) && h) { // X in screen bounds, h != 0
-        if(h < 0) {                 // Negative height??
+        if(h < 0) {                 // Negative height?
             y = y + h + 1;          // y = top
             h = -h;                 // Positive height
         }
@@ -600,7 +550,8 @@ void Adafruit_SPITFT::drawFastVLine(
                     h  = _height - y;
                 }
                 startWrite();
-                writeFastVLine(x, y, h, color);
+                setAddrWindow(x, y, 1, h);
+                writeColor(color, h);
                 // endWrite() is in writeColor() func if not using DMA
             }
         }
@@ -634,7 +585,8 @@ void Adafruit_SPITFT::drawFastHLine(
                     w  = _width - x;
                 }
                 startWrite();
-                writeFastHLine(x, y, w, color);
+                setAddrWindow(x, y, w, 1);
+                writeColor(color, w);
                 // endWrite() is in writeColor() func if not using DMA
             }
         }
@@ -653,33 +605,39 @@ void Adafruit_SPITFT::drawFastHLine(
 /**************************************************************************/
 void Adafruit_SPITFT::fillRect(
   int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-
-    if(w < 0) {        // Negative width?
-        x = x + w + 1; // x = left
-        w = -w;        // Positive width
-    }
-    if(h < 0) {        // Negative height??
-        y = y + h + 1; // y = top
-        h = -h;        // Positive height
-    }
-    if((x < _width) && (y < _height)) { // Off right/bottom discard
-        int16_t x2 = x + w - 1;
-        if(x2 >= 0) {                   // Off left discard
-            int16_t y2 = y + h - 1;
-            if(y2 >= 0) {               // Off top discard
-                if(x < 0) { // Clip left
-                    w += x;
-                    x  = 0;
+    if(w && h) {           // Nonzero size?
+        if(w < 0) {        // Negative width?
+            x = x + w + 1; // x = left
+            w = -w;        // Positive width
+        }
+        if(h < 0) {        // Negative height?
+            y = y + h + 1; // y = top
+            h = -h;        // Positive height
+        }
+        if((x < _width) && (y < _height)) { // Disregard off right/bottom
+            int16_t x2 = x + w - 1;         // Right
+            if(x2 >= 0) {                   // Disregard off left
+                int16_t y2 = y + h - 1;     // Bottom
+                if(y2 >= 0) {               // Disregard Off top
+                    if(x < 0) { // Clip left
+                        w += x;
+                        x  = 0;
+                    }
+                    if(y < 0) { // Clip top
+                        h += y;
+                        y  = 0;
+                    }
+                    if(x2 >= _width) {      // Clip right
+                        w = _width  - x;
+                    }
+                    if(y2 >= _height) {     // Clip bottom
+                        h = _height - y;
+                    }
+                    startWrite();
+                    setAddrWindow(x, y, w, h);
+                    writeColor(color, w * h);
+                    // endWrite() is in writeColor() func if not using DMA
                 }
-                if(y < 0) { // Clip top
-                    h += y;
-                    y  = 0;
-                }
-                if(x2 >= _width)  w = _width  - x; // Clip right
-                if(y2 >= _height) h = _height - y; // Clip bottom
-                startWrite();
-                writeFillRect(x, y, w, h, color);
-                // endWrite() is in writeColor() func if not using DMA
             }
         }
     }
@@ -761,9 +719,10 @@ void Adafruit_SPITFT::drawRGBBitmap(
         // as it will play well with any other code using the DMA library
         // on other channels.
 
+        tftptr   = this;
         dma_busy = true;
         dma.startJob();
-        // no endWrite() ... transfer is left 'open' during DMA
+        // Transfer is left open during DMA (callback will close)
     } else {
         while(h--) { // For each (clipped) scanline...
             writePixels(pcolors, w); // Push one (clipped) row
