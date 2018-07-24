@@ -124,7 +124,9 @@ class Adafruit_SPITFT : public Adafruit_GFX {
     int16_t  _xstart = 0, ///< Many displays don't have pixels starting at (0,0) of the internal framebuffer, this is the x offset from 0 to align
              _ystart = 0; ///< Many displays don't have pixels starting at (0,0) of the internal framebuffer, this is the y offset from 0 to align
 #ifdef ARDUINO_ARCH_SAMD
-    boolean  useDMA = false; ///< If set, use SPI DMA (via Adafruit_ZeroDMA)
+    boolean          useDMA = false; ///< If set, use SPI DMA (via Adafruit_ZeroDMA)
+    DmacDescriptor  *descriptor;     ///< Pointer to DMA descriptor list (one per line, max of width & height)
+    DmacDescriptor  *dptr;           ///< DMA library needs one valid descriptor allocated
 #endif
 };
 
