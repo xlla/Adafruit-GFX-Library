@@ -53,9 +53,9 @@
   static Adafruit_ZeroDMA  dma;              ///< DMA object
   static volatile boolean  dma_busy = false; ///< true = DMA transfer in progress
   static void dma_callback(Adafruit_ZeroDMA *dma) { dma_busy = false; }
-  #define DMA_WAIT { while(dma_busy); endWrite() }
+  #define DMA_WAIT() { while(dma_busy); endWrite() }
 #else
-  #define DMA_WAIT
+  #define DMA_WAIT()
 #endif
 
 /**************************************************************************/
@@ -204,6 +204,9 @@ void Adafruit_SPITFT::initSPI(uint32_t freq) {
     if(useDMA) {
         // Set up SPI DMA on SAMD boards:
 
+        // NOTE: should only init dma if not already initted!
+        // (may have multiple display instances)
+
         // Determine number of DMA descriptors required for a full-screen
         // update (one per line along major axis, since screen can be
         // rotated).  Descriptor-per-line is necessary to handle clipping
@@ -338,6 +341,7 @@ void Adafruit_SPITFT::spiWrite(uint8_t b) {
 */
 /**************************************************************************/
 void inline Adafruit_SPITFT::startWrite(void) {
+    DMA_WAIT();
     SPI_BEGIN_TRANSACTION();
     SPI_CS_LOW();
 }
@@ -615,8 +619,6 @@ void Adafruit_SPITFT::drawFastHLine(
 void Adafruit_SPITFT::fillRect(
   int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
 
-// Do FULL clipping here ******
-
     if(w < 0) {        // Negative width?
         x = x + w + 1; // x = left
         w = -w;        // Positive width
@@ -625,7 +627,6 @@ void Adafruit_SPITFT::fillRect(
         y = y + h + 1; // y = top
         h = -h;        // Positive height
     }
-
     if((x < _width) && (y < _height)) { // Off right/bottom discard
         int16_t x2 = x + w - 1;
         if(x2 >= 0) {                   // Off left discard
