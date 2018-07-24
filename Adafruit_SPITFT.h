@@ -73,7 +73,7 @@ class Adafruit_SPITFT : public Adafruit_GFX {
       @param  color 16-bit 5-6-5 Color to draw
     */
     void     inline writePixel(uint16_t color) { SPI_WRITE16(color); }
-    void     writePixels(uint16_t * colors, uint32_t len);
+    void     writePixels(uint16_t *colors, uint32_t len);
     void     writeColor(uint16_t color, uint32_t len);
     void     pushColor(uint16_t color);
 

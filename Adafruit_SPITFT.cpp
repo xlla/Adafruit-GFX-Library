@@ -53,9 +53,6 @@
   static Adafruit_ZeroDMA  dma;              ///< DMA object
   static volatile boolean  dma_busy = false; ///< true = DMA transfer in progress
   static void dma_callback(Adafruit_ZeroDMA *dma) { dma_busy = false; }
-  #define DMA_WAIT() { while(dma_busy); endWrite() }
-#else
-  #define DMA_WAIT()
 #endif
 
 /**************************************************************************/
@@ -341,7 +338,10 @@ void Adafruit_SPITFT::spiWrite(uint8_t b) {
 */
 /**************************************************************************/
 void inline Adafruit_SPITFT::startWrite(void) {
-    DMA_WAIT();
+#ifdef ARDUINO_ARCH_SAMD
+    while(dma_busy); // Wait for prior SPI DMA operation to complete
+    endWrite();      // End transaction, deselect
+#endif
     SPI_BEGIN_TRANSACTION();
     SPI_CS_LOW();
 }
@@ -388,6 +388,34 @@ void Adafruit_SPITFT::pushColor(uint16_t color) {
 */
 /**************************************************************************/
 void inline Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len) {
+#ifdef ARDUINO_ARCH_SAMD
+    if(useDMA) {
+        uint32_t bytesToGo = len * 2,  // Pixel count -> byte count
+                 addr      = (uint32_t)colors,
+                 bytesThisDescriptor, i;
+        for(i=0; bytesToGo > 0; i++) {
+            bytesThisDescriptor = bytesToGo;
+            if(bytesThisDescriptor > 65535) bytesThisDescriptor = 65535;
+            descriptor[i].SRCADDR.reg       = addr;
+            descriptor[i].BTCNT.reg         = bytesThisDescriptor;
+            descriptor[i].BTCTRL.bit.SRCINC = 0;
+            descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
+            addr                           += bytesThisDescriptor;
+        }
+        descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+
+        // Copy first descriptor to the DMA lib's descriptor table
+        memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
+        // This is preferable to setting the DMA descriptor base address
+        // as it will play well with any other code using the DMA library
+        // on other channels.
+
+        dma_busy = true;
+        dma.startJob();
+        // transfer must be left 'open' during DMA
+        return;
+    }
+#endif
     SPI_WRITE_PIXELS((uint8_t*)colors , len * 2);
 }
 
@@ -413,6 +441,13 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
         }
         descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+
+        // Copy first descriptor to the DMA lib's descriptor table
+        memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
+        // This is preferable to setting the DMA descriptor base address
+        // as it will play well with any other code using the DMA library
+        // on other channels.
+
         dma_busy = true;
         dma.startJob();
         // transfer must be left 'open' during DMA
@@ -719,6 +754,12 @@ void Adafruit_SPITFT::drawRGBBitmap(
             pcolors                        += saveW;
         }
         descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+
+        // Copy first descriptor to the DMA lib's descriptor table
+        memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
+        // This is preferable to setting the DMA descriptor base address
+        // as it will play well with any other code using the DMA library
+        // on other channels.
 
         dma_busy = true;
         dma.startJob();
