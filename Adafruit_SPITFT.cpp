@@ -259,7 +259,7 @@ void Adafruit_SPITFT::initSPI(uint32_t freq) {
             for(int i=0; i<major; i++) {
                 // No need to set SRCADDR, SRCINC or BTCNT -- done elsewhere.
                 descriptor[i].BTCTRL.bit.VALID    = true;
-                descriptor[i].BTCTRL.bit.EVOSEL   = 0x3; // Event strobe on beat xfer
+                descriptor[i].BTCTRL.bit.EVOSEL   = DMA_EVENT_OUTPUT_DISABLE;
                 descriptor[i].BTCTRL.bit.BLOCKACT = DMA_BLOCK_ACTION_NOACT;
                 descriptor[i].BTCTRL.bit.BEATSIZE = DMA_BEAT_SIZE_BYTE;
                 descriptor[i].BTCTRL.bit.DSTINC   = 0; // Don't increment dest
@@ -401,15 +401,15 @@ void inline Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len) {
                  addr      = (uint32_t)colors,
                  bytesThisDescriptor, i;
         for(i=0; bytesToGo > 0; i++) {
-            bytesThisDescriptor = bytesToGo;
-            if(bytesThisDescriptor > 65535) bytesThisDescriptor = 65535;
-            descriptor[i].SRCADDR.reg       = addr;
+            bytesThisDescriptor = (bytesToGo < 65535) ? bytesToGo : 65535;
+            descriptor[i].SRCADDR.reg       = addr + bytesThisDescriptor;
             descriptor[i].BTCNT.reg         = bytesThisDescriptor;
-            descriptor[i].BTCTRL.bit.SRCINC = 0;
+            descriptor[i].BTCTRL.bit.SRCINC = 1;
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
             addr                           += bytesThisDescriptor;
+            bytesToGo                      -= bytesThisDescriptor;
         }
-        descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+        descriptor[i-1].DESCADDR.reg = 0; // End descriptor list
 
         // Copy first descriptor to the DMA lib's descriptor table
         memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
@@ -417,7 +417,7 @@ void inline Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len) {
         // as it will play well with any other code using the DMA library
         // on other channels.
 
-        tftptr   = this;
+        tftptr   = this; // For callback to end SPI transaction
         dma_busy = true;
         dma.startJob();
         // transfer must be left open during DMA (callback will close)
@@ -443,15 +443,14 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
         uint32_t bytesToGo = len * 2,  // Pixel count -> byte count
                  bytesThisDescriptor, i;
         for(i=0; bytesToGo > 0; i++) {
-            bytesThisDescriptor = bytesToGo;
-            if(bytesThisDescriptor > 65535) bytesThisDescriptor = 65535;
+            bytesThisDescriptor = (bytesToGo < 65535) ? bytesToGo : 65535;
             descriptor[i].SRCADDR.reg       = (uint32_t)&color;
-            descriptor[i].BTCNT.reg         = bytesThisDescriptor;
             descriptor[i].BTCTRL.bit.SRCINC = 0;
+            descriptor[i].BTCNT.reg         = bytesThisDescriptor;
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
             bytesToGo                      -= bytesThisDescriptor;
         }
-        descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+        descriptor[i-1].DESCADDR.reg = 0; // End descriptor list
 
         // Copy first descriptor to the DMA lib's descriptor table
         memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
@@ -459,7 +458,7 @@ void Adafruit_SPITFT::writeColor(uint16_t color, uint32_t len) {
         // as it will play well with any other code using the DMA library
         // on other channels.
 
-        tftptr   = this;
+        tftptr   = this; // For callback to end SPI transaction
         dma_busy = true;
         dma.startJob();
         // transfer must be left open during DMA (callback will close)
@@ -706,13 +705,13 @@ void Adafruit_SPITFT::drawRGBBitmap(
         int i;
         w *= 2; // Pixel count to byte count
         for(i=0; i<h; i++) {
-            descriptor[i].SRCADDR.reg       = (uint32_t)pcolors;
+            descriptor[i].SRCADDR.reg       = (uint32_t)pcolors + w;
             descriptor[i].BTCNT.reg         = w;
             descriptor[i].BTCTRL.bit.SRCINC = 1;
             descriptor[i].DESCADDR.reg      = (uint32_t)&descriptor[i + 1];
             pcolors                        += saveW;
         }
-        descriptor[i-1].DESCADDR.reg = NULL; // End descriptor list
+        descriptor[i-1].DESCADDR.reg = 0; // End descriptor list
 
         // Copy first descriptor to the DMA lib's descriptor table
         memcpy(dptr, &descriptor[0], sizeof(DmacDescriptor));
@@ -720,7 +719,7 @@ void Adafruit_SPITFT::drawRGBBitmap(
         // as it will play well with any other code using the DMA library
         // on other channels.
 
-        tftptr   = this;
+        tftptr   = this; // For callback to end SPI transaction
         dma_busy = true;
         dma.startJob();
         // Transfer is left open during DMA (callback will close)
