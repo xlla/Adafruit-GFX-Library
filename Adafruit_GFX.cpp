@@ -2407,7 +2407,9 @@ GFXcanvas16::~GFXcanvas16(void) {
     @param  color 16-bit 5-6-5 Color to fill with
 */
 /**************************************************************************/
-void GFXcanvas16::drawPixel(int16_t x, int16_t y, uint16_t color) {
+void GFXcanvas16::drawPixel(int16_t x, int16_t y, uint16_t color, bool bigEndian) {
+  // avoid paramater-not-used complaints
+  (void)bigEndian;
   if (buffer) {
     if ((x < 0) || (y < 0) || (x >= _width) || (y >= _height))
       return;
@@ -2429,8 +2431,14 @@ void GFXcanvas16::drawPixel(int16_t x, int16_t y, uint16_t color) {
       y = HEIGHT - 1 - t;
       break;
     }
-
+  // TFT and SPI DMA endian is different we need to swap bytes
+  if (!bigEndian) {
+      uint8_t *buffer8 = (uint8_t *)(buffer + x + y * WIDTH);
+      buffer8[0] = (uint8_t) (color >> 8);
+      buffer8[1] = (uint8_t) (color & 0xf);
+  } else {
     buffer[x + y * WIDTH] = color;
+  }
   }
 }
 

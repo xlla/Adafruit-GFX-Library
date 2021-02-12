@@ -367,7 +367,7 @@ class GFXcanvas16 : public Adafruit_GFX {
 public:
   GFXcanvas16(uint16_t w, uint16_t h);
   ~GFXcanvas16(void);
-  void drawPixel(int16_t x, int16_t y, uint16_t color);
+  void drawPixel(int16_t x, int16_t y, uint16_t color, bool bigEndian = false);
   void fillScreen(uint16_t color);
   void byteSwap(void);
   void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
