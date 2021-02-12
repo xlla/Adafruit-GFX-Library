@@ -1806,16 +1806,16 @@ void Adafruit_SPITFT::drawRGBBitmap(int16_t x, int16_t y, uint16_t *pcolors,
   #else
     writePixels(pcolors, w * h); // Push one (clipped) row
 #endif
-  }
   } else {
-  while (h--) {              // For each (clipped) scanline...
-  #if defined(NRF52833_XXAA)
-    //write whole row in batch
-    writePixels(pcolors, w, true, true); // Push one (clipped) row
-  #else
-    writePixels(pcolors, w); // Push one (clipped) row
-#endif
-    pcolors += saveW;        // Advance pointer by one full (unclipped) line
+    while (h--) {              // For each (clipped) scanline...
+    #if defined(NRF52833_XXAA)
+        //write whole row in batch
+        writePixels(pcolors, w, true, true); // Push one (clipped) row
+    #else
+        writePixels(pcolors, w); // Push one (clipped) row
+    #endif
+        pcolors += saveW;        // Advance pointer by one full (unclipped) line
+    }
   }
   endWrite();
 }
