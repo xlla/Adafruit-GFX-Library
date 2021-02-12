@@ -1798,6 +1798,16 @@ void Adafruit_SPITFT::drawRGBBitmap(int16_t x, int16_t y, uint16_t *pcolors,
   pcolors += by1 * saveW + bx1; // Offset bitmap ptr to clipped top-left
   startWrite();
   setAddrWindow(x, y, w, h); // Clipped area
+  if (x == 0 && y == 0 && w == _width && h == _height) {
+      //is full size windows, no need send data by rows
+  #if defined(NRF52833_XXAA)
+    //write whole row in batch
+    writePixels(pcolors, w * h, true, true); // Push one (clipped) row
+  #else
+    writePixels(pcolors, w * h); // Push one (clipped) row
+#endif
+  }
+  } else {
   while (h--) {              // For each (clipped) scanline...
   #if defined(NRF52833_XXAA)
     //write whole row in batch
