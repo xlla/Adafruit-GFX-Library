@@ -992,8 +992,8 @@ void Adafruit_SPITFT::writePixels(uint16_t *colors, uint32_t len, bool block,
     hwspi._spi->writePixels(colors, len * 2);
     return;
   }
-#elif defined(ARDUINO_NRF52_ADAFRUIT) &&                                       \
-    defined(NRF52840_XXAA) // Adafruit nRF52 use SPIM3 DMA at 32Mhz
+#elif (defined(ARDUINO_NRF52_ADAFRUIT) &&                                       \
+    defined(NRF52840_XXAA)) || defined(NRF52833_XXAA) // Adafruit nRF52 use SPIM3 DMA at 32Mhz
   // TFT and SPI DMA endian is different we need to swap bytes
   if (!bigEndian) {
     for (uint32_t i = 0; i < len; i++) {
@@ -1799,7 +1799,12 @@ void Adafruit_SPITFT::drawRGBBitmap(int16_t x, int16_t y, uint16_t *pcolors,
   startWrite();
   setAddrWindow(x, y, w, h); // Clipped area
   while (h--) {              // For each (clipped) scanline...
+  #if defined(NRF52833_XXAA)
+    //write whole row in batch
+    writePixels(pcolors, w, true, true); // Push one (clipped) row
+  #else
     writePixels(pcolors, w); // Push one (clipped) row
+#endif
     pcolors += saveW;        // Advance pointer by one full (unclipped) line
   }
   endWrite();
